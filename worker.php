@@ -118,9 +118,9 @@ try {
   update_job_status($job_file, 'processing-career-insights');
   $coach_prompt = "Act as a career coach. You have been given a factual market briefing about a company. Your task is to add three new sections to the end of this document: 'Potential Industry Disruption', 'Tailored CV Points', and 'Insightful Interview Questions'. All your analysis MUST be based *only* on the provided briefing. ";
   if ($job_title) {
-    $coach_prompt .= "The CV points and interview questions must be specifically tailored for a candidate applying for the role of '$job_title'. ";
+    $coach_prompt .= "The CV points and interview questions must be specifically tailored for a candidate applying for the role of '$job_title'. Also suggest questions the cadidate could ask. ";
   } else {
-    $coach_prompt .= "The CV points and interview questions should be suitable for a general professional role at the company. ";
+    $coach_prompt .= "The CV points and interview questions should be suitable for a general professional role at the company. Also suggest questions the cadidate could ask. ";
   }
   $coach_prompt .= "Here is the factual briefing:\n\n{$factual}";
 
