@@ -1,212 +1,109 @@
 Intelligence Briefing API
-This is a standalone, asynchronous API service designed to generate detailed intelligence briefings and accompanying audio podcasts for a given company, based on specific industry trends.
+This is a standalone, asynchronous API for generating detailed company intelligence briefings and podcasts.
 
 Architecture Overview
-This application uses an asynchronous, job-based architecture to handle long-running tasks. This is essential because generating a full briefing and podcast can take several minutes.
+The API uses an asynchronous, job-based architecture to handle long-running tasks.
 
-API Service (index.php): A lightweight web service that receives requests. Its only jobs are to create a new job file on a persistent disk and to start the background worker. It immediately returns a job_id.
+Start Job (POST): The client sends a request with a company name. The API immediately creates a job, saves it to a file on a persistent disk, and returns a unique job_id.
 
-Background Worker (worker.php): A separate process that is triggered by the API service. It reads the job file, performs the multi-step AI calls (research, synthesis, text-to-speech), and saves the final output files (a Markdown document and an MP3 podcast).
+Background Worker: An independent PHP process (worker.php) is started in the background to perform the multi-step AI analysis and podcast generation.
 
-Persistent Disk: A networked storage volume on Render that is shared by both the API service and the worker. This is where job files and final reports/podcasts are stored.
+Check Status (GET): The client periodically polls a status endpoint using the job_id to see if the job is queued, processing, or complete.
 
-Deployment to Render (Asynchronous Setup)
-Deploying this service requires setting up three components on Render: a Persistent Disk, a Web Service for the API, and a Background Worker to process jobs.
+Download Results: Once complete, the status response will contain URLs to download the final briefing document and podcast MP3.
 
-Step 1: Create a Persistent Disk
+Deployment to Render
+This service is designed to be deployed on Render using Docker.
 
-First, create a place to store your job files and results.
+1. Project Setup on GitHub
 
-From the Render Dashboard, click New+ -> Persistent Disk.
+Push the following files to your GitHub repository:
 
-Name: briefing-storage
+index.php (the main API file)
 
-Size: 1 GB is a good starting point.
+worker.php (the background worker)
 
-Region: Choose your preferred region.
+composer.json (PHP dependencies)
 
-Click Create Persistent Disk.
+Dockerfile (Render build instructions)
 
-Step 2: Create the Web Service (API)
+You no longer need .htaccess or 000-default.conf.
 
-This service will handle incoming requests from your "Lovable" app.
+2. Service Setup on Render
 
-From the Render Dashboard, click New+ -> Web Service.
+Create a new Web Service on Render and connect it to your GitHub repository.
 
-Connect your GitHub repository.
+During setup, use the following settings:
 
-Environment: Set to Docker.
+Environment: Docker
 
-Name: intelligence-api
+Start Command: (Leave this blank, the Dockerfile handles it)
 
-Region: Must be the same region as your Persistent Disk.
+Add a Persistent Disk:
 
-Add Persistent Disk
+Mount Path: /data
 
-Under "Advanced Settings," click Add Persistent Disk.
+Size: 1 GB is sufficient to start.
 
-Disk: Select the briefing-storage disk you just created.
+Add your Environment Variables:
 
-Mount Path: /var/data
+GEMINI_API_KEY: Your secret key from Google AI Studio.
 
-Add Environment Variables
-
-Go to the Environment tab and add your secrets:
-
-GEMINI_API_KEY: Your key from Google AI Studio.
-
-APP_SECRET_KEY: A new, long, random string you create to secure your API.
-
-Click Create Web Service.
-
-Step 3: Create the Background Worker
-
-This service will run the worker.php script.
-
-From the Render Dashboard, click New+ -> Background Worker.
-
-Connect the same GitHub repository.
-
-Environment: Set to Docker.
-
-Name: intelligence-worker
-
-Region: Must be the same region as your Persistent Disk and Web Service.
-
-Add Persistent Disk & Environment Variables
-
-Follow the same steps as above to Add Persistent Disk (mount path /var/data) and your Environment Variables (GEMINI_API_KEY, APP_SECRET_KEY).
-
-Set the Start Command
-
-The Start Command for the worker is different. You do not need a build command. Set the start command to: php worker.php
-
-Click Create Background Worker.
+APP_SECRET_KEY: A long, random string you create to secure your API.
 
 API Usage
-Interaction with the API is a two-step process:
+Endpoint URL Structure
 
-Create a Job: Send a POST request to start the briefing process.
+The API no longer uses pretty URLs. All actions are routed through index.php using a query parameter.
 
-Check Status: Send GET requests using the job_id you received to check if the job is done.
+Base URL: https://your-service-name.onrender.com
 
-1. Create Briefing Job
+1. Create a New Briefing
 
-Endpoint: POST /create-briefing
+Method: POST
 
-Header: X-API-KEY: your-app-secret-key
+Endpoint: [Base URL]/index.php?action=create-briefing
+
+Headers:
+
+Content-Type: application/json
+
+X-API-KEY: [Your APP_SECRET_KEY]
 
 Body (JSON):
 
 {
   "company_name": "NVIDIA",
-  "industry_trends": ["AI Chip Dominance", "Data Center Growth", "Gaming Market Evolution"]
+  "job_title": "Software Engineer"
 }
+
+Note: job_title is optional.
 
 Success Response (202 Accepted):
 
 {
-  "status": "processing-queued",
-  "job_id": "65045eb6d3a0c"
+  "job_id": "briefing_65a5a1b9c3b2a1.23456789",
+  "status": "queued"
 }
 
-2. Check Briefing Status
+2. Check Job Status
 
-Poll this endpoint every 15-30 seconds until the status is complete or failed.
+Method: GET
 
-Endpoint: GET /briefing-status/{job_id}
+Endpoint: [Base URL]/index.php?action=briefing-status&job_id=[Your Job ID]
 
-Header: X-API-KEY: your-app-secret-key
+Headers:
 
-Intermediate Response (200 OK):
+X-API-KEY: [Your APP_SECRET_KEY]
+
+Response (when complete):
 
 {
-  "job_id": "65045eb6d3a0c",
-  "status": "processing-research",
-  "created_at": "...",
-  "updated_at": "..."
+  "job_id": "briefing_65a5a1b9c3b2a1.23456789",
+  "status": "complete",
+  // ... other job data ...
+  "result": {
+    "briefing_url": "https://.../index.php?action=get-file&job_id=...&type=briefing",
+    "podcast_url": "https://.../index.php?action=get-file&job_id=...&type=podcast"
+  }
 }
-
-Final Success Response (200 OK):
-
-{
-    "job_id": "65045eb6d3a0c",
-    "status": "complete",
-    "created_at": "...",
-    "updated_at": "...",
-    "results": {
-        "briefing_document_url": "/briefing/65045eb6d3a0c_briefing.md",
-        "sources": [
-            { "url": "...", "title": "..." }
-        ],
-        "podcast_url": "/podcast/65045eb6d3a0c_podcast.mp3"
-    }
-}
-
-Example JavaScript Client
-
-// This code would run on your "Lovable" front-end application
-
-const API_URL = '[https://intelligence-api.onrender.com](https://intelligence-api.onrender.com)'; // Your Render URL
-const SECRET_KEY = 'your-app-secret-key';
-
-async function startBriefing(companyName, trends) {
-    const response = await fetch(`${API_URL}/create-briefing`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-API-KEY': SECRET_KEY
-        },
-        body: JSON.stringify({
-            company_name: companyName,
-            industry_trends: trends
-        })
-    });
-
-    if (!response.ok) {
-        throw new Error('Failed to start briefing job');
-    }
-
-    const data = await response.json();
-    return data.job_id;
-}
-
-async function checkStatus(jobId) {
-    const response = await fetch(`${API_URL}/briefing-status/${jobId}`, {
-         headers: { 'X-API-KEY': SECRET_KEY }
-    });
-    if (!response.ok) {
-        throw new Error('Failed to check job status');
-    }
-    return await response.json();
-}
-
-// --- Main Polling Logic ---
-async function main() {
-    try {
-        console.log('Starting briefing job...');
-        const jobId = await startBriefing('Salesforce', ['CRM market consolidation', 'AI integration in sales tools']);
-        console.log(`Job started with ID: ${jobId}`);
-
-        // Poll for the result
-        const poll = setInterval(async () => {
-            const statusResult = await checkStatus(jobId);
-            console.log(`Current status: ${statusResult.status}`);
-
-            if (statusResult.status === 'complete') {
-                clearInterval(poll);
-                console.log('Briefing complete!');
-                console.log('Document URL:', API_URL + statusResult.results.briefing_document_url);
-                console.log('Podcast URL:', API_URL + statusResult.results.podcast_url);
-            } else if (statusResult.status === 'failed') {
-                clearInterval(poll);
-                console.error('Job failed:', statusResult.results.error);
-            }
-        }, 20000); // Poll every 20 seconds
-
-    } catch (error) {
-        console.error(error);
-    }
-}
-
-main();
