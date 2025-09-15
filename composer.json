@@ -1,0 +1,8 @@
+{
+    "name": "gemini/student-prep-api",
+    "description": "A standalone API to help students research companies for job applications.",
+    "require": {
+        "guzzlehttp/guzzle": "^7.8"
+    }
+}
+
