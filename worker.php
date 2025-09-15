@@ -23,7 +23,7 @@ if (!$gemini_api_key) {
 }
 
 // File paths (must match index.php)
-$data_path = '/var/data';
+$data_path = '/data';
 $jobs_path = $data_path . '/jobs';
 $output_path_briefing = $data_path . '/briefing';
 $output_path_podcast = $data_path . '/podcast';
