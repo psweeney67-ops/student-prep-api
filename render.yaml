@@ -1,0 +1,40 @@
+services:
+  # The Web Service that handles incoming API requests from Lovable
+  - type: web
+    name: student-prep-api
+    env: php
+    plan: free
+    # --- IMPORTANT: Set your Start Command in the Render UI ---
+    # Go to your Web Service -> Settings -> Start Command
+    # Set it to: vendor/bin/heroku-php-apache2 .
+    envVars:
+      - key: APP_SECRET_KEY
+        generateValue: true
+      - key: GEMINI_API_KEY
+        sync: false
+    disks:
+      - name: data-disk
+        mountPath: /data
+        sizeGB: 1
+
+  # The Background Worker that processes the jobs
+  - type: worker
+    name: intelligence-worker
+    env: php
+    plan: free
+    # --- IMPORTANT: Set your Start Command in the Render UI ---
+    # Go to your Background Worker -> Settings -> Start Command
+    # Set it to: php watcher.php
+    envVars:
+      - fromService:
+          type: web
+          name: student-prep-api
+          envVarKey: APP_SECRET_KEY
+      - fromService:
+          type: web
+          name: student-prep-api
+          envVarKey: GEMINI_API_KEY
+    disks:
+      - name: data-disk
+        mountPath: /data
+        sizeGB: 1
