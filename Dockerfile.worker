@@ -1,0 +1,30 @@
+# --- FINAL, CORRECTED VERSION ---
+
+# Use the official PHP 8.2 Command Line (CLI) image.
+# This is a much lighter and more appropriate base for a background worker.
+FROM php:8.2-cli
+
+# Install system dependencies required by the worker.
+RUN apt-get update && apt-get install -y \
+    git \
+    zip \
+    unzip \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Composer (PHP package manager)
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+# Set the working directory for the application.
+WORKDIR /app
+
+# Copy composer files and install dependencies.
+COPY composer.json composer.lock* ./
+RUN composer install --no-dev --optimize-autoloader
+
+# Copy the rest of the application files into the working directory.
+COPY . .
+
+# Set the command to run the watcher script. This will now work reliably.
+CMD ["php", "watcher.php"]
+
