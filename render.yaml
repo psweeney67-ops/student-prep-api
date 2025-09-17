@@ -1,5 +1,4 @@
 services:
-  # The Web Service that handles incoming API requests from Lovable
   - type: web
     name: student-prep-api
     env: php
@@ -16,7 +15,6 @@ services:
         mountPath: /data
         sizeGB: 1
 
-  # The Background Worker that processes the jobs
   - type: worker
     name: intelligence-worker
     env: php
