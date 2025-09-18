@@ -1,12 +1,11 @@
 <?php
-// Intelligence Briefing API - Simplified Single Service
-// This script handles incoming API requests, validates them, creates a job file,
-// and reliably launches the worker process in the background.
+// Intelligence Briefing API - Front Controller
+// This script handles incoming API requests, validates them,
+// and starts a background worker process.
 
 // --- Error Handling & Logging Setup ---
 ini_set('display_errors', 0);
 ini_set('log_errors', 1);
-// Log errors to stderr so they appear in Render's main log.
 ini_set('error_log', 'php://stderr');
 
 set_error_handler(function ($severity, $message, $file, $line) {
@@ -39,8 +38,12 @@ if ($client_api_key !== $app_secret_key) {
     exit;
 }
 
-// --- Routing ---
-$action = $_GET['action'] ?? null;
+// --- FINAL FIX: Robust Routing ---
+// This new router understands clean URLs like /create-briefing
+$request_uri = strtok($_SERVER['REQUEST_URI'], '?'); // Get the path without query params
+$path_parts = explode('/', trim($request_uri, '/'));
+$action = $path_parts[0] ?? null; // The first part of the path is the action
+
 header('Content-Type: application/json');
 
 try {
@@ -75,21 +78,18 @@ try {
             }
             file_put_contents($jobs_path . '/' . $job_id . '.json', json_encode($job_data, JSON_PRETTY_PRINT));
             
-            // --- RELIABLE BACKGROUND PROCESS LAUNCH ---
-            // This command reliably executes the worker script in the background.
-            // It redirects all output to /dev/null to prevent hanging.
+            // Reliably start the worker in the background
             $command = "php worker.php " . escapeshellarg($job_id) . " > /dev/null 2>&1 &";
-            exec($command, $output, $return_var);
+            exec($command);
             
-            // Immediately return success to the client.
             http_response_code(202); // 202 Accepted
             echo json_encode(['success' => true, 'job_id' => $job_id, 'status' => 'queued']);
             break;
 
         case 'briefing-status':
-            $job_id = $_GET['job_id'] ?? null;
+            $job_id = $path_parts[1] ?? null; // The job_id is the second part of the path
             if (empty($job_id)) {
-                throw new Exception("job_id is required.", 400);
+                throw new Exception("job_id is required. Use /briefing-status/{job_id}", 400);
             }
             
             $job_file = '/data/jobs/' . basename($job_id) . '.json';
@@ -97,33 +97,17 @@ try {
                 throw new Exception("Job not found.", 404);
             }
             
-            // Serve the job status directly.
-            readfile($job_file);
+            $job_data = json_decode(file_get_contents($job_file), true);
+            echo json_encode($job_data);
             break;
-            
-        case 'serve-file':
-            // Security: Prevent directory traversal attacks.
-            $type = basename($_GET['type'] ?? ''); // briefing or podcast
-            $filename = basename($_GET['filename'] ?? '');
-
-            if (empty($type) || empty($filename) || !in_array($type, ['briefing', 'podcast'])) {
-                throw new Exception("Invalid file request.", 400);
-            }
-            
-            $file_path = "/data/{$type}/{$filename}";
-            
-            if (!file_exists($file_path)) {
-                throw new Exception("File not found.", 404);
-            }
-
-            $mime_type = $type === 'briefing' ? 'text/markdown' : 'audio/mpeg';
-            header("Content-Type: $mime_type");
-            header('Content-Length: ' . filesize($file_path));
-            readfile($file_path);
-            exit; // Stop script execution after sending file
 
         default:
-            throw new Exception("Invalid action. Use ?action=create-briefing or ?action=briefing-status", 400);
+            // Handle root URL or unknown actions
+            if (empty($action)) {
+                 echo json_encode(['status' => 'API is running']);
+            } else {
+                 throw new Exception("Invalid action: $action", 404);
+            }
     }
 } catch (Exception $e) {
     $code = $e->getCode() >= 400 ? $e->getCode() : 400;
